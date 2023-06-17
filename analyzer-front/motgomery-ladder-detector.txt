@@ -1,0 +1,77 @@
+// javassist
+
+public static boolean usesMontgomeryLadder(String className) throws NotFoundException, CannotCompileException {
+    ClassPool pool = ClassPool.getDefault();
+    CtClass ctClass = pool.get(className);
+
+    for (CtMethod method : ctClass.getDeclaredMethods()) {
+        MethodInfo methodInfo = method.getMethodInfo();
+        CodeAttribute codeAttribute = methodInfo.getCodeAttribute();
+
+        if (codeAttribute == null) {
+            continue;
+        }
+
+        CodeIterator codeIterator = codeAttribute.iterator();
+        while (codeIterator.hasNext()) {
+            int opcode = codeIterator.byteAt(codeIterator.next());
+
+            if (opcode != Opcode.GETFIELD) {
+                continue;
+            }
+
+            int nextOpcode = codeIterator.byteAt(codeIterator.next());
+            if (nextOpcode != Opcode.DUP) {
+                continue;
+            }
+
+            nextOpcode = codeIterator.byteAt(codeIterator.next());
+            if (nextOpcode != Opcode.INVOKEVIRTUAL) {
+                continue;
+            }
+
+            String methodName = method.getMethodInfo().getConstPool()
+                    .getMethodrefName(codeIterator.u16bitAt(codeIterator.next()));
+            if (!methodName.equals("add") && !methodName.equals("subtract")) {
+                continue;
+            }
+
+            nextOpcode = codeIterator.byteAt(codeIterator.next());
+            if (nextOpcode != Opcode.PUTFIELD){
+                continue;
+            }
+
+            nextOpcode = codeIterator.byteAt(codeIterator.next());
+            if (nextOpcode != Opcode.INVOKEVIRTUAL) {
+                continue;
+            }
+
+            methodName = method.getMethodInfo().getConstPool()
+                    .getMethodrefName(codeIterator.u16bitAt(codeIterator.next()));
+            if (!methodName.equals("double")) {
+                continue;
+            }
+
+            nextOpcode = codeIterator.byteAt(codeIterator.next());
+            if (nextOpcode != Opcode.GETFIELD) {
+                continue;
+            }
+
+            nextOpcode = codeIterator.byteAt(codeIterator.next());
+            if (nextOpcode != Opcode.INVOKEVIRTUAL) {
+                continue;
+            }
+
+            methodName = method.getMethodInfo().getConstPool()
+                    .getMethodrefName(codeIterator.u16bitAt(codeIterator.next()));
+            if (!methodName.equals("add")) {
+                continue;
+            }
+
+            // Нашли последовательность вызовов методов, соответствующую Montgomery ladder
+            return true;
+        }
+    }
+
+    return false;
+}
