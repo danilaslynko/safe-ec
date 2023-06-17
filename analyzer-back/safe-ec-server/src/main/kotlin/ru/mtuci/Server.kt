@@ -18,11 +18,14 @@ import ru.mtuci.plugins.Result.TechError
 import ru.mtuci.plugins.Result.Undefined
 import ru.mtuci.plugins.Result.Validated
 import ru.mtuci.plugins.Result.Vulnerable
-import java.io.OutputStreamWriter
+import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
 import java.math.BigInteger
 import java.net.ServerSocket
 import java.net.Socket
+import java.nio.charset.StandardCharsets
 import java.security.spec.*
+import java.util.Base64
 import java.util.HexFormat
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -34,12 +37,12 @@ const val VULNERABLE = "VULNERABLE"
 private val log = LoggerFactory.getLogger("Server")
 
 @Serializable
-class Command(val type: String, val value: String) {
+class Command(val id: String, val type: String, val value: String) {
     fun toRequest(): Request = when (type) {
         "OID" -> OID(value)
         "Name" -> Named(value)
         "Params" -> parseParamsJson(value)
-        else -> throw RuntimeException("Unknown request type $type")
+        else -> throw RuntimeException("Unknown request type '$type'")
     }
 }
 
@@ -49,7 +52,7 @@ class ParamsRequest(val type: String, val fp: String?, val m: Int?, val ks: IntA
                     val ed: String?, val edFactors: List<String>?)
 
 @Serializable
-class Response(val type: String, val info: String? = null)
+class Response(val reqId: String?, val type: String, val info: String? = null)
 
 class Server(private val port: Int, private val plugins: IPlugins) {
 
@@ -69,49 +72,73 @@ class Server(private val port: Int, private val plugins: IPlugins) {
             }
 
             launch(Dispatchers.IO) {
-                handleClient(client)
+                try {
+                    handleClient(client)
+                }
+                catch (e: Exception) {
+                    log.error("Cannot handle client", e)
+                }
+                finally {
+                    if (!client.isClosed)
+                        client.close()
+                    
+                    log.info("Client {} finished", client)
+                }
             }
         }
     }
 
     private fun handleClient(client: Socket) {
-        val writer = client.getOutputStream().writer()
-        log.debug("New client $client")
-        client.getInputStream().reader().use {
-            while (!stopped.get() && !client.isClosed) {
-                val received = it.readUntil("\n$")
-                if (received.isEmpty())
-                    continue
+        val out = BufferedOutputStream(client.getOutputStream())
+        val input = BufferedInputStream(client.getInputStream())
+        log.debug("New client {}", client)
+        while (!stopped.get() && !client.isClosed) {
+            var command: Command? = null
+            val result: Result = try {
+                val received = input.readUntil("$")
+                log.debug("Received: $received")
+                if (received.isEmpty() || received == "CLOSE") {
+                    log.info("Socket closed")
+                    break
+                }
 
-                log.info("Received: $received")
-                val request = Json.decodeFromString<Command>(received).toRequest()
-                val result: Result = try {
-                    val plugins = plugins.list.groupBy { p: Plugin -> p.priority() }.toSortedMap()
-                    plugins.keys.fold(Undefined() as Result) { acc, priority ->
-                        when (acc) {
-                            is Vulnerable, is TechError -> acc
-                            is Undefined, is Validated -> plugins[priority]!!.fold(acc) { acc, plugin ->
-                                when (acc) {
-                                    is Vulnerable, is TechError -> acc
-                                    is Undefined, is Validated -> request.accept(plugin)
-                                }
+                val decodedBytes = Base64.getDecoder().decode(received)
+                val decoded = String(decodedBytes, StandardCharsets.UTF_8)
+                log.info("Request: $decoded")
+                command = Json.decodeFromString<Command>(decoded)
+                val request = command.toRequest()
+                val plugins = plugins.list.groupBy { p: Plugin -> p.priority() }.toSortedMap()
+                plugins.keys.fold(Undefined() as Result) { acc, priority ->
+                    when (acc) {
+                        is Vulnerable, is TechError -> acc
+                        is Undefined, is Validated -> plugins[priority]!!.fold(acc) { acc, plugin ->
+                            when (acc) {
+                                is Vulnerable, is TechError -> acc
+                                is Undefined, is Validated -> request.accept(plugin)
                             }
                         }
                     }
-                } catch (e: Exception) {
-                    log.error("Got error while running plugins", e)
-                    TechError(e.message)
                 }
+            } catch (e: Exception) {
+                log.error("Got error while running plugins", e)
+                TechError(e.message)
+            }
 
-                val response = when (result) {
-                    is Validated, is Undefined -> Response(SUCCESS)
-                    is TechError -> Response(ERROR, result.message)
-                    is Vulnerable -> Response(VULNERABLE, result.message)
-                }
+            val response = when (result) {
+                is Validated, is Undefined -> Response(command?.id, SUCCESS)
+                is TechError -> Response(command?.id, ERROR, result.message)
+                is Vulnerable -> Response(command?.id, VULNERABLE, result.message)
+            }
 
-                writer.write(Json.encodeToString(response))
-                writer.write("\n$\n")
-                writer.flush()
+            try {
+                val serialized = Json.encodeToString(response)
+                log.info("Response: $serialized")
+                val encoded = Base64.getEncoder().encode(serialized.toByteArray(StandardCharsets.UTF_8))
+                out.write(encoded)
+                out.write("$".toByteArray(StandardCharsets.UTF_8))
+                out.flush()
+            } catch (e: Exception) {
+                log.error("Cannot send response", e)
             }
         }
     }
