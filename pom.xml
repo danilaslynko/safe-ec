@@ -21,7 +21,6 @@
     <modules>
         <module>analyzer-back/safe-ec-server</module>
         <module>analyzer-back/plugin-api</module>
-        <module>analyzer-front/safe-ec-client</module>
         <module>analyzer-front/safe-ec-java</module>
     </modules>
     

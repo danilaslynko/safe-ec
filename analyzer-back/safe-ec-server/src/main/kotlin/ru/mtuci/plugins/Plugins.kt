@@ -25,7 +25,7 @@ ${plugin.javaClass}{
 """
 
 class Plugins(path: String) : IPlugins {
-    private val log = LoggerFactory.getLogger(javaClass);
+    private val log = LoggerFactory.getLogger(javaClass)
 
     private val lock = ReentrantReadWriteLock()
     private val container = HashMap<Path, Pair<ClassLoader, Plugin>>()

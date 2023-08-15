@@ -7,7 +7,7 @@ import ru.mtuci.plugins.Plugins
 import java.nio.file.Paths
 
 fun main(args: Array<String>) {
-    val log = LoggerFactory.getLogger("Server");
+    val log = LoggerFactory.getLogger("Server")
 
     val port = Integer.parseInt(args.elementAtOrElse(0) { "15555" })
     val pluginsDir = Paths.get(System.getProperty("user.dir")).resolve("plugins").toAbsolutePath()

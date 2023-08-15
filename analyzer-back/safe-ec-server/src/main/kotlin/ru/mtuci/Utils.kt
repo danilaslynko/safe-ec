@@ -18,7 +18,7 @@ fun InputStream.readUntil(suffix: String): String {
         next = read()
     }
 
-    return strBuilder.toString();
+    return strBuilder.toString()
 }
 
 fun isBase64(cs: CharSequence) =
