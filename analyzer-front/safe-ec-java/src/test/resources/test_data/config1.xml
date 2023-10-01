@@ -1,0 +1,11 @@
+<Configuration>
+    <Crypto>
+        <AcceptableCurve>secp256k1</AcceptableCurve>
+        <AcceptableCurve>idgostr34102001cryptoprocparamset</AcceptableCurve>
+        <ExcludedCurve>secp256r1</ExcludedCurve>
+    </Crypto>
+    <ExternalServices>
+        <User>user1</User>
+        <Password>123456</Password>
+    </ExternalServices>
+</Configuration>

@@ -1,28 +1,30 @@
 package ru.mtuci;
 
 import lombok.extern.slf4j.Slf4j;
-import ru.mtuci.impl.Analyzer;
+import ru.mtuci.base.AnalysisFailure;
+import ru.mtuci.factory.AnalyzerFactoryResolver;
+import ru.mtuci.base.Analyzer;
 import ru.mtuci.net.SafeEcClient;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 
 @Slf4j
-public class AnalyzerFacade {
-    public static Report analyze(String path) {
-        Path resolved = Paths.get(path).toAbsolutePath();
-        Report report = new Report(resolved);
-        if (!Files.exists(resolved)) {
-            log.error("Path {} does not exist, no analysis performed", resolved);
-            report.add(new AnalysisFailure("Path {} does not exist, no analysis performed", resolved));
+public class AnalyzerFacade
+{
+    public static Report analyze(Path path)
+    {
+        path = path.toAbsolutePath();
+        Report report = new Report(path);
+        if (!Files.exists(path))
+        {
+            log.error("Path {} does not exist, no analysis performed", path);
+            report.add(new AnalysisFailure("Path {} does not exist, no analysis performed", path));
             return report;
         }
 
-        Analyzer analyzer = Analyzer.getImpl(resolved);
-        try (var client = SafeEcClient.getInstance()) {
-            analyzer.analyze();
-        }
+        Analyzer analyzer = AnalyzerFactoryResolver.resolveFactory().getImpl(path);
+        SafeEcClient.withClient(analyzer::analyze);
         analyzer.getErrors().forEach(report::add);
         return report;
     }

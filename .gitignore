@@ -27,3 +27,4 @@ replay_pid*
 .idea/
 */workdir/safecurves/*
 */target/*
+/analyzer-front/safe-ec-java/target/

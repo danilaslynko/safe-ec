@@ -1,0 +1,5 @@
+analyzers:
+  jks:
+    keystores:
+      - name: 'test.jks'
+        password: '123456'

@@ -1,0 +1,11 @@
+application:
+  crypto:
+    curves:
+      acceptable:
+        - 'secp256k1'
+        - 'secp256r1'
+      forbidden:
+        - 'idgostr34102001cryptoprocparamset'
+  external:
+    user: 'user1'
+    password: '123456'

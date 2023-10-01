@@ -1,0 +1,8 @@
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+    <entry key="test_app.key_gen_curve.allowed">secp256r1, idgostr34102001cryptoprobparamset</entry>
+    <entry key="test_app.key_gen_curve.deprecated">secp256k1</entry>
+    <entry key="test_app.external_service.url">https://www.google.com</entry>
+    <entry key="test_app.external_service.curve">idgostr34102001cryptoprocparamset</entry>
+    <entry key="test_app.external_service_alias">key_alias</entry>
+</properties>
