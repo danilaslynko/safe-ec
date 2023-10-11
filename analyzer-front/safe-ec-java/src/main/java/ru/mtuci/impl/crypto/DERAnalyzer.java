@@ -49,7 +49,7 @@ public class DERAnalyzer extends RequestingAnalyzer
     }
 
     @Override
-    protected List<Future<Response>> makeFutureResponses()
+    public List<Future<Response>> makeFutureResponses()
     {
         var objects = tryParse();
         return ASN1Utils.makeRequests(objects, this::request);

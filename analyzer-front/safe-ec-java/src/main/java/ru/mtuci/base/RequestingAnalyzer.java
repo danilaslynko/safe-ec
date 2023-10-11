@@ -82,12 +82,12 @@ public abstract class RequestingAnalyzer extends Analyzer
         return SafeEcClient.getInstance().send(request);
     }
 
-    protected List<Future<Response>> makeFutureResponses()
+    public List<Future<Response>> makeFutureResponses()
     {
         return Collections.emptyList();
     }
 
-    protected List<RequestDto> makeRequests()
+    public List<RequestDto> makeRequests()
     {
         return makeFutureResponses().stream().map(RequestDto::of).collect(Collectors.toList());
     }

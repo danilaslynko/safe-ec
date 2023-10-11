@@ -30,7 +30,7 @@ public class YAMLAnalyzer extends RequestingAnalyzer
 
     @SneakyThrows
     @Override
-    protected List<RequestDto> makeRequests()
+    public List<RequestDto> makeRequests()
     {
         @SuppressWarnings("unchecked")
         Map<String, Object> mapLoaded = mapper.readValue(Files.newBufferedReader(path), Map.class);

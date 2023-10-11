@@ -7,6 +7,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import ru.mtuci.Utils;
 import ru.mtuci.base.RequestingAnalyzer;
+import ru.mtuci.impl.crypto.CryptoProKeystoreAnalyzer;
+import ru.mtuci.impl.crypto.JKSAnalyzer;
+import ru.mtuci.impl.crypto.PEMAnalyzer;
 import ru.mtuci.net.Request;
 import ru.mtuci.net.Response;
 import ru.mtuci.utils.Either;
@@ -31,6 +34,22 @@ public class PropertiesAnalyzer extends RequestingAnalyzer
 
     private static final Pattern OID_PATTERN = Pattern.compile("^([0-2])((\\.0)|(\\.[1-9][0-9]*))*$");
 
+    private static class SpringBootKeystoreProps
+    {
+        private static final String KEYSTORE_FILE_PROP = "server.ssl.key-store";
+        private static final String KEYSTORE_TYPE_PROP = "server.ssl.key-store-type";
+        private static final String KEYSTORE_PASS_PROP = "server.ssl.key-store-password";
+        private static final String KEYSTORE_PROVIDER_PROP = "server.ssl.key-store-provider";
+        private static final String KEY_ALIAS_PROP = "server.ssl.key-alias";
+
+        private static final String TRUSTSTORE_TYPE_PROP = "server.ssl.trust-store";
+        private static final String TRUSTSTORE_FILE_PROP = "server.ssl.trust-store-type";
+        private static final String TRUSTSTORE_PASS_PROP = "server.ssl.trust-store-password";
+        private static final String TRUSTSTORE_PROVIDER_PROP = "server.ssl.trust-store-provider";
+
+        private static final String TRUST_CERT_PROP = "server.ssl.trust-certificate";
+    }
+
     public PropertiesAnalyzer(Path path)
     {
         super(path);
@@ -38,7 +57,7 @@ public class PropertiesAnalyzer extends RequestingAnalyzer
 
     @Override
     @SneakyThrows
-    protected List<RequestDto> makeRequests()
+    public List<RequestDto> makeRequests()
     {
         Properties props = new Properties();
         props.load(Files.newInputStream(path));
@@ -52,6 +71,36 @@ public class PropertiesAnalyzer extends RequestingAnalyzer
     {
         Properties toIterate = (Properties) props.clone();
         List<Matched> matches = new ArrayList<>();
+
+        var requests = new ArrayList<RequestDto>();
+        if (props.containsKey(SpringBootKeystoreProps.KEYSTORE_FILE_PROP))
+        {
+            String file = props.getProperty(SpringBootKeystoreProps.KEYSTORE_FILE_PROP);
+            String type = props.getProperty(SpringBootKeystoreProps.KEYSTORE_TYPE_PROP, "JKS");
+            String provider = props.getProperty(SpringBootKeystoreProps.KEYSTORE_PROVIDER_PROP, "SUN");
+            String password = props.getProperty(SpringBootKeystoreProps.KEYSTORE_PASS_PROP, "");
+            String alias = props.getProperty(SpringBootKeystoreProps.KEY_ALIAS_PROP);
+
+            requests.addAll(analyzeKeyStore(file, type, password, provider, alias));
+        }
+
+        if (props.containsKey(SpringBootKeystoreProps.TRUSTSTORE_FILE_PROP))
+        {
+            String file = props.getProperty(SpringBootKeystoreProps.TRUSTSTORE_FILE_PROP);
+            String type = props.getProperty(SpringBootKeystoreProps.TRUSTSTORE_TYPE_PROP, "JKS");
+            String provider = props.getProperty(SpringBootKeystoreProps.TRUSTSTORE_PROVIDER_PROP, "SUN");
+            String password = props.getProperty(SpringBootKeystoreProps.TRUSTSTORE_PASS_PROP, "");
+
+            requests.addAll(analyzeKeyStore(file, type, password, provider, null));
+        }
+
+        if (props.containsKey(SpringBootKeystoreProps.TRUST_CERT_PROP))
+        {
+            var path = Path.of(props.getProperty(SpringBootKeystoreProps.TRUST_CERT_PROP));
+            var pemAnalyzer = new PEMAnalyzer(path);
+            requests.addAll(pemAnalyzer.makeRequests());
+        }
+
         toIterate.forEach((keyObj, valueObj) -> {
             var prop = keyObj.toString();
             if (StringUtils.containsAnyIgnoreCase(prop, "exclud", "exclusion", "deprecat", "forbid"))
@@ -61,7 +110,22 @@ public class PropertiesAnalyzer extends RequestingAnalyzer
             if (!matched.isEmpty())
                 matches.addAll(matched);
         });
-        return matches.stream().map(m -> request.apply(m).fromLeft(RequestDto::of)).toList();
+        requests.addAll(matches.stream().map(m -> request.apply(m).fromLeft(RequestDto::of)).toList());
+        return requests;
+    }
+
+    private static List<RequestDto> analyzeKeyStore(String file, String type, String password, String provider, String alias)
+    {
+        var path = Path.of(file);
+        RequestingAnalyzer analyzer = null;
+        if ("JKS".equals(type))
+            analyzer = new JKSAnalyzer(path, password, alias, type, null);
+        else if ("BKS".equals(type))
+            analyzer = new JKSAnalyzer(path, password, alias, type, "BC");
+        else if ("JCP".equals(provider))
+            analyzer = new CryptoProKeystoreAnalyzer(path, type, password, alias);
+
+        return analyzer != null ? analyzer.makeRequests() : Collections.emptyList();
     }
 
     static private List<Matched> matchByNameOrOID(String prop, String str)

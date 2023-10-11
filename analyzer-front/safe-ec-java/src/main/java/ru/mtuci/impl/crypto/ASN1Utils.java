@@ -57,8 +57,15 @@ public class ASN1Utils
                 oid = ASN1ObjectIdentifier.getInstance(privateKey.getPrivateKeyAlgorithm().getParameters()).toString();
             }
 
-            if (oid != null && Curve.resolve(Oid.fromString(oid)) != null)
-                responses.add(requestFunc.apply(Request.Type.OID, oid));
+            try
+            {
+                if (oid != null && Curve.resolve(Oid.fromString(oid)) != null)
+                    responses.add(requestFunc.apply(Request.Type.OID, oid));
+            }
+            catch (Exception e)
+            {
+                log.warn("Cannot request", e);
+            }
         };
 
         for (Object parsedPem : objects)

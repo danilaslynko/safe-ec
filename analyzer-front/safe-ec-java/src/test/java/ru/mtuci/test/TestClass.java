@@ -6,7 +6,8 @@ public class TestClass
 {
     public static void testResolveByName()
     {
-        var secp256k1 = Curve.resolve("secp256k1");
+        var name = "secp256k1";
+        var secp256k1 = Curve.resolve(name);
         System.out.println(secp256k1);
     }
 

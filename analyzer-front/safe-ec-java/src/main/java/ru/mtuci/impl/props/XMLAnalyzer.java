@@ -31,7 +31,7 @@ public class XMLAnalyzer extends RequestingAnalyzer
 
     @Override
     @SneakyThrows
-    protected List<RequestDto> makeRequests()
+    public List<RequestDto> makeRequests()
     {
         Properties props = new Properties();
         BiConsumer<LocationMeta.LocationMetaBuilder, String> propFiller;

@@ -1,0 +1,30 @@
+swift-connector:
+  exchange:
+    messages-dir: '/home/danya/messages/safe-ec/tests/swift-dir'
+    sender-bic: 'TESTBIC0XACH'
+    receiver-bic: 'TESTBIC1XACH'
+  crypto:
+    certs-dir: '/home/danya/messages/safe-ec/tests/certs'
+    key-store: '/home/danya/messages/safe-ec/tests/swift.jks'
+    key-alias: 'swift'
+    key-store-password: '123456'
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+
+server:
+  ssl:
+    enabled: true
+    protocol: 'GostTLSv1.2'
+    ciphers: 'TLS_GOSTR341112_256_WITH_KUZNYECHIK_CTR_OMAC,TLS_GOSTR341112_256_WITH_MAGMA_CTR_OMAC,TLS_GOSTR341112_256_WITH_28147_CNT_IMIT'
+#    trust-store-type: 'HDImageStore'
+#    trust-store-provider: 'JCP'
+#    trust-store-password: '123456'
+    key-store: '/home/danya/messages/safe-ec/key.store'
+    key-store-password: '123456'
+    key-alias: 'safeEC'
+    key-store-type: 'HDImageStore'
+    key-store-provider: 'JCP'

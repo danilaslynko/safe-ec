@@ -6,7 +6,7 @@
 
     <artifactId>safe-ec</artifactId>
     <groupId>ru.mtuci</groupId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.0</version>
     <packaging>pom</packaging>
 
     <name>safe-ec</name>

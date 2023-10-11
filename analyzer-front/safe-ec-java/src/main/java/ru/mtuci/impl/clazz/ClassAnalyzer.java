@@ -1,5 +1,6 @@
 package ru.mtuci.impl.clazz;
 
+import io.churchkey.asn1.Oid;
 import io.churchkey.ec.Curve;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +19,7 @@ import org.bouncycastle.crypto.ec.CustomNamedCurves;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
+import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.LdcInsnNode;
@@ -31,13 +33,17 @@ import org.objectweb.asm.tree.analysis.SourceValue;
 import ru.mtuci.Utils;
 import ru.mtuci.base.LocationMeta;
 import ru.mtuci.base.RequestingAnalyzer;
+import ru.mtuci.impl.crypto.CryptoProKeystoreAnalyzer;
 import ru.mtuci.net.Request;
 import ru.mtuci.net.Response;
 
 import java.io.BufferedInputStream;
+import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.security.KeyStore;
+import java.security.spec.ECGenParameterSpec;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -72,7 +78,7 @@ public class ClassAnalyzer extends RequestingAnalyzer implements Opcodes
 
     @SneakyThrows
     @Override
-    protected List<RequestDto> makeRequests()
+    public List<RequestDto> makeRequests()
     {
         var requests = new ArrayList<RequestDto>();
         try (var is = new BufferedInputStream(Files.newInputStream(path, StandardOpenOption.READ)))
@@ -111,28 +117,28 @@ public class ClassAnalyzer extends RequestingAnalyzer implements Opcodes
                         var args = Arrays.stream(methodType.getArgumentTypes()).map(Type::getClassName).toList();
                         if (args.size() == 1 && args.get(0).equals(String.class.getName()) &&
                                 CURVE_HOLDERS.contains(owner) && StringUtils.equalsAny(methodInsn.name, "getByName", "getByNameLazy")
-                                || (owner.equals(Curve.class.getName()) && StringUtils.equalsAny(methodInsn.name, "resolve", "valueOf")))
+                                || (owner.equals(Curve.class.getName()) && StringUtils.equalsAny(methodInsn.name, "resolve", "valueOf"))
+                                || (owner.equals(ECGenParameterSpec.class.getName()) && StringUtils.equals(methodInsn.name, "<init>")))
                         {
-                            var resp = checkStringNameOperand(frame);
+                            var str = getLastInsnString(frame);
+                            Future<Response> resp = checkString(str);
                             if (resp != null)
                             {
                                 Integer l = lineNumber.getValue();
                                 requests.add(new RequestDto(resp, () -> newLocation.apply(l)));
                             }
                         }
-                    }
-                    else if (instr instanceof FieldInsnNode fieldInsn)
-                    {
-                        if (instr.getOpcode() == GETSTATIC || instr.getOpcode() == GETFIELD)
+                        else if (owner.equals(KeyStore.class.getName()) && methodInsn.name.equals("getInstance"))
                         {
-                            var owner = fieldInsn.owner.replace('/', '.');
-                            if ((CURVE_HOLDERS.contains(owner) || owner.equals(Curve.class.getName())) && Utils.curveByName(fieldInsn.name) != null)
+                            var allArgs = frame.getStackSize();
+                            var typeVar = frame.getStack(allArgs - args.size());
+                            if (typeVar.insns.size() == 1)
                             {
-                                var resp = request(Request.Type.Named, fieldInsn.name);
-                                if (resp != null)
+                                var keyStoreType = getInsnString(frame, typeVar.insns.iterator().next());
+                                if (StringUtils.equalsAny(keyStoreType, "HDImageStore", "CertStore"))
                                 {
-                                    Integer l = lineNumber.getValue();
-                                    requests.add(new RequestDto(resp, () -> newLocation.apply(l)));
+                                    var keystoreAnalyzer = new CryptoProKeystoreAnalyzer(null, keyStoreType, null, null);
+                                    requests.addAll(keystoreAnalyzer.makeRequests());
                                 }
                             }
                         }
@@ -143,31 +149,79 @@ public class ClassAnalyzer extends RequestingAnalyzer implements Opcodes
         return requests;
     }
 
-    private Future<Response> checkStringNameOperand(Frame<SourceValue> frame)
+    private String getLastInsnString(Frame<SourceValue> frame)
     {
         var arg = frame.getStack(frame.getStackSize() - 1);
         if (arg.insns.size() != 1)
             return null;
 
-        var argSrc = arg.insns.iterator().next();
-        if (argSrc instanceof LdcInsnNode ldc)
-        {
-            if (ldc.cst instanceof String name && Utils.curveByName(name) != null)
-                return request(Request.Type.Named, name);
-        }
-        else if (argSrc instanceof VarInsnNode var)
+        return getInsnString(frame, arg.insns.iterator().next());
+    }
+
+    private String getInsnString(Frame<SourceValue> frame, AbstractInsnNode insn)
+    {
+        var str = basicGetInsnString(insn);
+        if (str != null)
+            return str;
+
+        if (insn instanceof VarInsnNode var)
         {
             var local = frame.getLocal(var.var);
             if (local.insns.size() != 1)
                 return null;
 
             var localSrc = local.insns.iterator().next();
-            if (localSrc instanceof LdcInsnNode ldc)
+            if (localSrc instanceof VarInsnNode store)
+                localSrc = store.getPrevious();
+
+            return basicGetInsnString(localSrc);
+        }
+        return null;
+    }
+
+    private static String basicGetInsnString(AbstractInsnNode insn)
+    {
+        if (insn instanceof LdcInsnNode ldc)
+        {
+            if (ldc.cst instanceof String str)
+                return str;
+        }
+        else if (insn instanceof FieldInsnNode field)
+        {
+            try
             {
-                if (ldc.cst instanceof String name && Utils.curveByName(name) != null)
-                    return request(Request.Type.Named, name);
+                var owner = Class.forName(Type.getObjectType(field.owner).getClassName());
+                var f = owner.getField(field.name);
+                if (!Modifier.isStatic(f.getModifiers()))
+                    return null;
+
+                f.setAccessible(true);
+                var result = f.get(null);
+                if (result instanceof String str)
+                    return str;
+            }
+            catch (Exception e)
+            {
+                log.warn("Cannot resolve field value {}", field, e);
             }
         }
+        return null;
+    }
+
+    private Future<Response> checkString(String str)
+    {
+        try
+        {
+            if (Utils.curveByName(str) != null)
+                return request(Request.Type.Named, str);
+
+            if (Curve.resolve(Oid.fromString(str)) != null)
+                return request(Request.Type.OID, str);
+        }
+        catch (Exception ignored)
+        {
+        }
+
         return null;
     }
 }
