@@ -24,7 +24,8 @@ public class CryptoProKeystoreAnalyzer extends KeyStoreAnalyzer
     private static volatile Boolean cryptoProLoaded = null;
 
     private static final String allCheckedIndicator = UUID.randomUUID().toString();
-    private static final Map<Path, List<String>> checked = new ConcurrentHashMap<>();
+    private static final String globalKeyStore = UUID.randomUUID().toString();
+    private static final Map<String, List<String>> checked = new ConcurrentHashMap<>();
 
     private final String password;
     private final String type;
@@ -69,25 +70,38 @@ public class CryptoProKeystoreAnalyzer extends KeyStoreAnalyzer
         if (!cryptoProLoaded)
             return null;
 
-        var checkedAliases = checked.computeIfAbsent(path, __ -> new ArrayList<>());
+        var keyStoreId = path == null ? globalKeyStore : path.toString();
+        var keyStoreIdForLogging = globalKeyStore.equals(keyStoreId) ? "GLOBAL" : keyStoreId;
+        var checkedAliases = checked.computeIfAbsent(keyStoreId, __ -> new ArrayList<>());
         if (alias != null && checkedAliases.contains(alias) || checkedAliases.contains(allCheckedIndicator))
         {
-            log.info("Alias {} in keystore {} were checked", alias, path);
+            log.info("{} aliases in keystore {} already checked", alias == null ? "All" : "[" + alias + "]", keyStoreIdForLogging);
             return null;
         }
 
-        try (var is = Files.newInputStream(path))
+
+        try
         {
             var original = KeyStore.getInstance(type);
             var passChars = password == null ? null : password.toCharArray();
-            original.load(is, passChars);
+            if (path != null)
+            {
+                try (var is = Files.newInputStream(path))
+                {
+                    original.load(is, passChars);
+                }
+            }
+            else
+            {
+                original.load(null, null);
+            }
 
             checkedAliases.add(StringUtils.defaultString(alias, allCheckedIndicator));
-            return extractSingleAliasKeyStore(original, passChars, alias);
+            return extractSingleAliasKeyStore(original, alias);
         }
         catch (IOException | KeyStoreException | NoSuchAlgorithmException | CertificateException e)
         {
-            log.error("Cannot load CryptoPro keystore {}", path, e);
+            log.error("Cannot load CryptoPro keystore {}", keyStoreIdForLogging, e);
             return null;
         }
     }

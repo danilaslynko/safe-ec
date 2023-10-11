@@ -28,7 +28,10 @@ public class ClassAnalyzerTest
         Analyzer analyzer = new ClassAnalyzer(path);
         TestSafeEcClient.addAnswer("1", new Response("1", Response.Type.VULNERABLE, "Vulnerable curve 1"));
         TestSafeEcClient.addAnswer("2", new Response("2", Response.Type.VULNERABLE, "Vulnerable curve 2"));
-        TestSafeEcClient.test(analyzer::analyze);
+        var requests = TestSafeEcClient.test(analyzer::analyze);
+        var req = requests.get(3);
+        Assertions.assertEquals(Request.Type.OID, req.type());
+        Assertions.assertEquals("1.2.643.2.2.35.1", req.value());
         var failures = analyzer.getErrors();
         Assertions.assertEquals(2, failures.size());
         var result = new Result();

@@ -61,7 +61,7 @@ public class JKSAnalyzer extends KeyStoreAnalyzer
             var keystore = provider == null ? KeyStore.getInstance(type) : KeyStore.getInstance(type, provider);
             var passChars = password.toCharArray();
             keystore.load(is, passChars);
-            return extractSingleAliasKeyStore(keystore, passChars, alias);
+            return extractSingleAliasKeyStore(keystore, alias);
         }
         catch (IOException | KeyStoreException | NoSuchAlgorithmException | CertificateException | NoSuchProviderException e)
         {

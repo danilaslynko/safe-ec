@@ -17,7 +17,6 @@ import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Enumeration;
 import java.util.List;
 import java.util.concurrent.Future;
 
@@ -44,7 +43,7 @@ public abstract class KeyStoreAnalyzer extends RequestingAnalyzer
                 return Collections.emptyList();
             }
 
-            var aliases = enumerationToList(keystore.aliases());
+            var aliases = Collections.list(keystore.aliases());
             for (String alias : aliases)
             {
                 if (keystore.isCertificateEntry(alias))
@@ -70,27 +69,18 @@ public abstract class KeyStoreAnalyzer extends RequestingAnalyzer
 
     protected abstract KeyStore getKeyStore();
 
-    protected static <T> List<T> enumerationToList(Enumeration<T> enumeration)
-    {
-        var list = new ArrayList<T>();
-        while (enumeration.hasMoreElements())
-            list.add(enumeration.nextElement());
-
-        return list;
-    }
-
-    protected static KeyStore extractSingleAliasKeyStore(KeyStore original, char[] passChars, String alias)
+    protected static KeyStore extractSingleAliasKeyStore(KeyStore original, String alias)
             throws KeyStoreException, IOException, NoSuchAlgorithmException, CertificateException
     {
         var tempOs = new ByteArrayOutputStream();
-        original.store(tempOs, passChars);
+        original.store(tempOs, "123456".toCharArray());
 
         var storeBytes = tempOs.toByteArray();
         var tempIs = new ByteArrayInputStream(storeBytes);
 
         var forAnalysis = KeyStore.getInstance(original.getType());
-        forAnalysis.load(tempIs, passChars);
-        var aliases = enumerationToList(forAnalysis.aliases());
+        forAnalysis.load(tempIs, "123456".toCharArray());
+        var aliases = Collections.list(forAnalysis.aliases());
         if (StringUtils.isNotEmpty(alias) && aliases.contains(alias))
         {
             aliases.stream().filter(a -> !alias.equals(a)).forEach(a -> {

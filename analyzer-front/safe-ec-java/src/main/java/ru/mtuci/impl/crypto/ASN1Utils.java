@@ -5,8 +5,10 @@ import io.churchkey.ec.Curve;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
+import org.bouncycastle.asn1.ASN1Sequence;
 import org.bouncycastle.asn1.cms.ContentInfo;
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
+import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.asn1.x9.X9ECParameters;
 import org.bouncycastle.cert.X509CertificateHolder;
@@ -39,22 +41,22 @@ public class ASN1Utils
     public static List<Future<Response>> makeRequests(Iterable<Object> objects, BiFunction<Request.Type, Object, Future<Response>> requestFunc)
     {
         JcaPEMKeyConverter keyConverter = new JcaPEMKeyConverter().setProvider(BouncyCastleProvider.PROVIDER_NAME);
-        JcaX509CertificateConverter certConverter = new JcaX509CertificateConverter();
+        JcaX509CertificateConverter certConverter = new JcaX509CertificateConverter().setProvider(BouncyCastleProvider.PROVIDER_NAME);
         List<Future<Response>> responses = new ArrayList<>();
         Consumer<Key> keyConsumer = key -> {
-            if (!(key instanceof ECKey))
+            if (!(key instanceof ECKey || key.getClass().getName().startsWith("ru.CryptoPro.")))
                 return;
 
             String oid = null;
             if (key instanceof PublicKey)
             {
                 SubjectPublicKeyInfo publicKey = SubjectPublicKeyInfo.getInstance(key.getEncoded());
-                oid = ASN1ObjectIdentifier.getInstance(publicKey.getAlgorithm().getParameters()).toString();
+                oid = getAlgorithmOID(publicKey.getAlgorithm());
             }
             else if (key instanceof PrivateKey)
             {
                 PrivateKeyInfo privateKey = PrivateKeyInfo.getInstance(key.getEncoded());
-                oid = ASN1ObjectIdentifier.getInstance(privateKey.getPrivateKeyAlgorithm().getParameters()).toString();
+                oid = getAlgorithmOID(privateKey.getPrivateKeyAlgorithm());
             }
 
             try
@@ -117,5 +119,14 @@ public class ASN1Utils
     {
         ByteArrayInputStream bais = new ByteArrayInputStream(certIn.getEncoded());
         return (X509Certificate) Utils.getX509CertificateFactory().generateCertificate(bais);
+    }
+
+    private static String getAlgorithmOID(AlgorithmIdentifier alg)
+    {
+        var parameters = alg.getParameters();
+        if (parameters instanceof ASN1Sequence seq)
+            parameters = seq.getObjectAt(0);
+
+        return ASN1ObjectIdentifier.getInstance(parameters).toString();
     }
 }

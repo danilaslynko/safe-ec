@@ -4,6 +4,7 @@ import io.churchkey.asn1.Oid;
 import io.churchkey.ec.Curve;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.mutable.MutableInt;
 import org.bouncycastle.asn1.anssi.ANSSINamedCurves;
@@ -22,6 +23,7 @@ import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
+import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.LineNumberNode;
 import org.objectweb.asm.tree.MethodInsnNode;
@@ -55,6 +57,8 @@ import java.util.stream.Stream;
 @Slf4j
 public class ClassAnalyzer extends RequestingAnalyzer implements Opcodes
 {
+    private static final int MAX_ITERS = 500;
+
     private static final List<String> CURVE_HOLDERS = Stream.of(
             Curve.class,
             X962NamedCurves.class,
@@ -120,7 +124,7 @@ public class ClassAnalyzer extends RequestingAnalyzer implements Opcodes
                                 || (owner.equals(Curve.class.getName()) && StringUtils.equalsAny(methodInsn.name, "resolve", "valueOf"))
                                 || (owner.equals(ECGenParameterSpec.class.getName()) && StringUtils.equals(methodInsn.name, "<init>")))
                         {
-                            var str = getLastInsnString(frame);
+                            var str = getLastInsnString(frame, instructions, frames);
                             Future<Response> resp = checkString(str);
                             if (resp != null)
                             {
@@ -134,7 +138,7 @@ public class ClassAnalyzer extends RequestingAnalyzer implements Opcodes
                             var typeVar = frame.getStack(allArgs - args.size());
                             if (typeVar.insns.size() == 1)
                             {
-                                var keyStoreType = getInsnString(frame, typeVar.insns.iterator().next());
+                                var keyStoreType = getInsnString(frame, typeVar.insns.iterator().next(), instructions, frames, 0);
                                 if (StringUtils.equalsAny(keyStoreType, "HDImageStore", "CertStore"))
                                 {
                                     var keystoreAnalyzer = new CryptoProKeystoreAnalyzer(null, keyStoreType, null, null);
@@ -149,38 +153,29 @@ public class ClassAnalyzer extends RequestingAnalyzer implements Opcodes
         return requests;
     }
 
-    private String getLastInsnString(Frame<SourceValue> frame)
+    private String getLastInsnString(Frame<SourceValue> frame, InsnList instructions, Frame<SourceValue>[] frames)
     {
         var arg = frame.getStack(frame.getStackSize() - 1);
         if (arg.insns.size() != 1)
             return null;
 
-        return getInsnString(frame, arg.insns.iterator().next());
+        return getInsnString(frame, arg.insns.iterator().next(), instructions, frames, 0);
     }
 
-    private String getInsnString(Frame<SourceValue> frame, AbstractInsnNode insn)
+    private String getInsnString(Frame<SourceValue> frame, AbstractInsnNode insn, InsnList instructions, Frame<SourceValue>[] frames, int iter)
     {
-        var str = basicGetInsnString(insn);
-        if (str != null)
-            return str;
-
-        if (insn instanceof VarInsnNode var)
+        if (insn.getOpcode() == DUP)
         {
-            var local = frame.getLocal(var.var);
-            if (local.insns.size() != 1)
-                return null;
-
-            var localSrc = local.insns.iterator().next();
-            if (localSrc instanceof VarInsnNode store)
-                localSrc = store.getPrevious();
-
-            return basicGetInsnString(localSrc);
+            insn = insn.getPrevious();
+            var i = ArrayUtils.indexOf(frames, frame);
+            frame = frames[i - 1];
         }
-        return null;
-    }
 
-    private static String basicGetInsnString(AbstractInsnNode insn)
-    {
+        if (iter > MAX_ITERS)
+        {
+            log.warn("Too complex value, skip");
+            return null;
+        }
         if (insn instanceof LdcInsnNode ldc)
         {
             if (ldc.cst instanceof String str)
@@ -204,6 +199,20 @@ public class ClassAnalyzer extends RequestingAnalyzer implements Opcodes
             {
                 log.warn("Cannot resolve field value {}", field, e);
             }
+        }
+        else if (insn instanceof VarInsnNode var)
+        {
+            var local = frame.getLocal(var.var);
+            if (local.insns.size() != 1)
+                return null;
+
+            var localSrc = local.insns.iterator().next();
+            if (localSrc instanceof VarInsnNode)
+                localSrc = localSrc.getPrevious(); // Инструкция со значением, инициализирующим переменную
+
+            var i = instructions.indexOf(localSrc);
+            frame = frames[i];
+            return getInsnString(frame, localSrc, instructions, frames, iter + 1);
         }
         return null;
     }
