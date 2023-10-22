@@ -141,7 +141,7 @@ public class PropertiesAnalyzer extends RequestingAnalyzer
                 result.add(new Matched(prop, "OID", Collections.singletonMap("oid", s)));
 
             if (Utils.curveByName(s) != null)
-                result.add(new Matched(prop, "Named", Collections.singletonMap("name", s)));
+                result.add(new Matched(prop, "Name", Collections.singletonMap("name", s)));
         }
 
         return result;
@@ -154,7 +154,7 @@ public class PropertiesAnalyzer extends RequestingAnalyzer
             Request.Type type = Request.Type.valueOf(this.type);
             Object data = switch (type)
             {
-                case OID, Named -> properties.values().iterator().next();
+                case OID, Name -> properties.values().iterator().next();
                 // TODO Действительно ли кто-то будет в пропертях передавать параметры кривой?
                 case Params ->
                 {

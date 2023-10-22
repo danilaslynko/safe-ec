@@ -62,7 +62,7 @@ public class TestSafeEcClient extends SafeEcClient
             @Override
             public Response get()
             {
-                return answers.computeIfAbsent(request.id(), r -> new Response(r, Response.Type.SUCCESS, null));
+                return answers.computeIfAbsent(request.id(), r -> new Response(r, Response.Type.SUCCESS, null, null));
             }
 
             @Override
@@ -77,10 +77,10 @@ public class TestSafeEcClient extends SafeEcClient
     {
         try (MockedStatic<SafeEcClient> mock = Mockito.mockStatic(SafeEcClient.class))
         {
-            mock.when(SafeEcClient::newInstance).thenReturn(new TestSafeEcClient());
-            mock.when(() -> SafeEcClient.withClient(action)).thenCallRealMethod();
+            mock.when(() -> SafeEcClient.newInstance(null, null)).thenReturn(new TestSafeEcClient());
+            mock.when(() -> SafeEcClient.withClient(action, null, null)).thenCallRealMethod();
             mock.when(SafeEcClient::getInstance).thenCallRealMethod();
-            withClient(action);
+            withClient(action, null, null);
         }
         ArrayList<Request> result = new ArrayList<>(requests);
         requests.clear();

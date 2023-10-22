@@ -222,7 +222,7 @@ public class ClassAnalyzer extends RequestingAnalyzer implements Opcodes
         try
         {
             if (Utils.curveByName(str) != null)
-                return request(Request.Type.Named, str);
+                return request(Request.Type.Name, str);
 
             if (Curve.resolve(Oid.fromString(str)) != null)
                 return request(Request.Type.OID, str);

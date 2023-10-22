@@ -1,6 +1,7 @@
 package ru.mtuci;
 
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
+import lombok.Getter;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 
@@ -61,6 +62,8 @@ public class Config
     ;
 
     private final Map<String, Map<String, Object>> analyzersConfig;
+    @Getter
+    private final Map<String, Object> safeEcClientConfig;
 
     @SneakyThrows
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -68,6 +71,7 @@ public class Config
     {
         Map config = new YAMLMapper().readValue(is, Map.class);
         analyzersConfig = (Map) config.get("analyzers");
+        safeEcClientConfig = (Map) config.get("safe-ec-client");
     }
 
     public Map<String, Object> getAnalyzerConfig(String analyzer)

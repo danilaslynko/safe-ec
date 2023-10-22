@@ -19,12 +19,13 @@ public class AnalyzerFacade
         if (!Files.exists(path))
         {
             log.error("Path {} does not exist, no analysis performed", path);
-            report.add(new AnalysisFailure("Path {} does not exist, no analysis performed", path));
+            report.add(new AnalysisFailure(null, "Path {} does not exist, no analysis performed", path));
             return report;
         }
 
+        var safeEcClientConfig = Config.INSTANCE.getSafeEcClientConfig();
         Analyzer analyzer = AnalyzerFactoryResolver.resolveFactory().getImpl(path);
-        SafeEcClient.withClient(analyzer::analyze);
+        SafeEcClient.withClient(analyzer::analyze, (String) safeEcClientConfig.get("host"), (Integer) safeEcClientConfig.get("port"));
         analyzer.getErrors().forEach(report::add);
         return report;
     }

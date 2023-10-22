@@ -42,7 +42,7 @@ public final class KeyStoreLoader
         if (!keyStore.containsAlias(alias))
         {
             var keyPairGenerator = KeyPairGenerator.getInstance("ECDSA", "BC");
-            keyPairGenerator.initialize(new ECGenParameterSpec("secp256r1"));
+            keyPairGenerator.initialize(new ECGenParameterSpec("secp224r1"));
             var keyPair = keyPairGenerator.generateKeyPair();
 
             var subject = new X500Name("CN=SafeEC,O=SWIFT");

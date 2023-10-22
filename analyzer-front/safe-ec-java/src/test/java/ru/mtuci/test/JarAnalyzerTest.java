@@ -70,8 +70,8 @@ public class JarAnalyzerTest
     public void test()
     {
         var jarAnalyzer = new JarAnalyzer(jarPath);
-        TestSafeEcClient.addAnswer("1", new Response("1", Response.Type.VULNERABLE, "Vulnerable curve 1"));
-        TestSafeEcClient.addAnswer("2", new Response("2", Response.Type.VULNERABLE, "Vulnerable curve 2"));
+        TestSafeEcClient.addAnswer("1", new Response("1", Response.Type.VULNERABLE, null, "Vulnerable curve 1"));
+        TestSafeEcClient.addAnswer("2", new Response("2", Response.Type.VULNERABLE, null, "Vulnerable curve 2"));
         TestSafeEcClient.test(jarAnalyzer::analyze);
         var failures = jarAnalyzer.getErrors();
         var result = new Result();

@@ -1,0 +1,16 @@
+analyzers:
+  jks:
+    keystores:
+      - name: 'test.jks'
+        password: '123456'
+  jar:
+    excluded: [
+      bcpkix-jdk18on-1.76.jar,
+      bcprov-jdk18on-1.76.jar,
+      bcutil-jdk18on-1.76.jar,
+      lombok-1.18.30.jar
+    ]
+
+safe-ec-client:
+  host: localhost
+  port: 15555

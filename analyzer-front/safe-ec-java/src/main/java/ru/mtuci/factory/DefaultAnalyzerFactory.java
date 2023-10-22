@@ -32,16 +32,20 @@ public class DefaultAnalyzerFactory implements AnalyzerFactory
         if (Files.isSymbolicLink(path))
             path = path.toRealPath();
 
+        if (path.endsWith("pom.properties") || path.endsWith("pom.xml") || path.endsWith("package-info.class") || path.endsWith("module-info.class"))
+            return NOOP;
+
         String extension = null;
         int lastDot = path.toString().lastIndexOf('.');
         if (lastDot > -1)
             extension = path.toString().substring(lastDot);
 
+        log.debug("Extension is {} for {}", extension, path);
         Analyzer analyzer = JarAnalyzer.EXTENSIONS.contains(extension) ? new JarAnalyzer(path)
                 : ClassAnalyzer.EXTENSION.equals(extension) ? new ClassAnalyzer(path)
                 : PropertiesAnalyzer.EXTENSIONS.contains(extension) ? new PropertiesAnalyzer(path)
                 : XMLAnalyzer.EXTENSIONS.contains(extension) ? new XMLAnalyzer(path)
-                : YAMLAnalyzer.EXTENSIONS.contains(extension) ? new XMLAnalyzer(path)
+                : YAMLAnalyzer.EXTENSIONS.contains(extension) ? new YAMLAnalyzer(path)
                 : JKSAnalyzer.EXTENSIONS.contains(extension) ? new JKSAnalyzer(path)
                 : NOOP;
 
@@ -49,6 +53,7 @@ public class DefaultAnalyzerFactory implements AnalyzerFactory
             return analyzer;
 
         String mimeType = new Tika().detect(path);
+        log.debug("Mime-type is {} for {}", mimeType, path);
         analyzer = JarAnalyzer.MIME_TYPES.contains(mimeType) ? new JarAnalyzer(path)
                 : PropertiesAnalyzer.MIME_TYPES.contains(mimeType) ? new PropertiesAnalyzer(path)
                 : DERAnalyzer.MIME_TYPES.contains(mimeType) ? new PropertiesAnalyzer(path)

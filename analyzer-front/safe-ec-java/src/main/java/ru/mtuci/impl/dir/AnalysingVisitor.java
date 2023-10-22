@@ -31,7 +31,7 @@ public class AnalysingVisitor extends SimpleFileVisitor<Path>
     @Override
     public FileVisitResult visitFileFailed(Path file, IOException exc)
     {
-        errors.add(new AnalysisFailure("Cannot visit path {}", file, exc));
+        errors.add(new AnalysisFailure(null, "Cannot visit path {}", file, exc));
         return FileVisitResult.CONTINUE;
     }
 

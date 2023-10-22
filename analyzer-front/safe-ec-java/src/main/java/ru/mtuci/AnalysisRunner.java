@@ -62,7 +62,7 @@ public class AnalysisRunner
 
         try
         {
-            Files.writeString(sarifJsonFile, report.toSarifJsonString(), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+            Files.writeString(sarifJsonFile, report.toSarifJsonString(), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
         }
         catch (Exception e)
         {
