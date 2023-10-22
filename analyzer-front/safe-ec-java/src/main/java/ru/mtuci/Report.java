@@ -72,9 +72,6 @@ public class Report
     @SneakyThrows
     public String toString()
     {
-        if (rows.isEmpty())
-            return "";
-
         List<AnalysisFailure> techErrors = new ArrayList<>();
         List<AnalysisFailure> normalFailures = new ArrayList<>();
 
@@ -99,7 +96,7 @@ public class Report
                 - %d EC check errors;
                 - %d unexpected errors;
                 %s
-                """.formatted(DELIMITER, formatter.format(LocalDateTime.now()), DELIMITER, path, rows.size(), normalFailures.size(), techErrors.size(), DELIMITER).stripIndent());
+                """.formatted(DELIMITER, formatter.format(LocalDateTime.now()), path, DELIMITER, rows.size(), normalFailures.size(), techErrors.size(), DELIMITER).stripIndent());
 
         if (!normalFailures.isEmpty())
         {

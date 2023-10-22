@@ -6,7 +6,6 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import ru.mtuci.Utils;
 
-import java.net.InetAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -104,11 +103,12 @@ public class SafeEcClient implements AutoCloseable
         return INSTANCE;
     }
 
-    public static void withClient(Runnable action)
+    @SneakyThrows
+    public static void withClient(Runnable action, String host, Integer port)
     {
         if (contexts.get() == 0)
         {
-            INSTANCE = newInstance();
+            INSTANCE = newInstance(host, port);
             INSTANCE.open();
         }
 
@@ -122,9 +122,9 @@ public class SafeEcClient implements AutoCloseable
         }
     }
 
-    protected static SafeEcClient newInstance()
+    protected static SafeEcClient newInstance(String host, Integer port)
     {
-        return new SafeEcClient(System.getProperty("server.host"), Integer.getInteger("server.port", 7999));
+        return new SafeEcClient(host, port);
     }
 
     private static final int DOLLAR_SIGN_BYTE = 36;
@@ -137,8 +137,8 @@ public class SafeEcClient implements AutoCloseable
     private final String host;
     private final int port;
 
-    private Socket client;
-    private Thread receiver;
+    private volatile Socket client;
+    private volatile Thread receiver;
 
     protected SafeEcClient(String host, Integer port)
     {
@@ -184,22 +184,12 @@ public class SafeEcClient implements AutoCloseable
         T run() throws Exception;
     }
 
-    private void ensureOpen()
-    {
-        read(() -> {
-            if (client == null)
-                open();
-
-            return null;
-        });
-    }
-
-    public void open()
+    public synchronized void open()
     {
         write(() -> {
             if (client == null)
             {
-                client = new Socket(InetAddress.getByAddress(host.getBytes(StandardCharsets.UTF_8)), port);
+                client = new Socket(host, port);
                 client.setSoTimeout(10_000);
 
                 receiver = new Thread(() -> {
@@ -210,7 +200,10 @@ public class SafeEcClient implements AutoCloseable
                             Response response = receive();
                             log.info("Received from server: {}", response);
                             ResponseFuture future = pending.get(response.reqId());
-                            future.resolve(response);
+                            if (future == null)
+                                log.warn("Cannot find related request, response skipped");
+                            else
+                                future.resolve(response);
                         }
                     }
                     catch (Exception e)
@@ -228,8 +221,6 @@ public class SafeEcClient implements AutoCloseable
     public Future<Response> send(Request request)
     {
         return read(() -> {
-            ensureOpen();
-
             String jsonRequest = Utils.toJson(request);
             log.info("Sending request: {}", jsonRequest);
 
@@ -244,39 +235,40 @@ public class SafeEcClient implements AutoCloseable
         });
     }
 
+    @SneakyThrows
     private Response receive()
     {
-        return read(() -> {
-            var inputStream = client.getInputStream();
-            var stringBuilder = new StringBuilder();
-            int next = inputStream.read();
-            while (next != -1 && next != DOLLAR_SIGN_BYTE)
-            {
-                stringBuilder.append((char) next);
-                next = inputStream.read();
-            }
-            var decoded = Base64.getDecoder().decode(stringBuilder.toString());
-            return Utils.fromJson(decoded, Response.class);
-        });
+        var inputStream = read(() -> client.getInputStream());
+        var stringBuilder = new StringBuilder();
+        int next = inputStream.read();
+        while (next != -1 && next != DOLLAR_SIGN_BYTE)
+        {
+            stringBuilder.append((char) next);
+            next = inputStream.read();
+        }
+        var decoded = Base64.getDecoder().decode(stringBuilder.toString());
+        return Utils.fromJson(decoded, Response.class);
     }
 
     @Override
-    public void close()
+    public synchronized void close() throws Exception
     {
         write(() -> {
+            log.info("Closing connection to SafeEC server {}", client);
             if (client != null)
             {
                 client.close();
                 client = null;
             }
-            if (receiver != null)
-            {
-                receiver.interrupt();
-                receiver.join();
-                receiver = null;
-            }
-
             return null;
         });
+        log.info("Waiting for receiver thread");
+        if (receiver != null)
+        {
+            receiver.interrupt();
+            receiver.join();
+            receiver = null;
+        }
+        log.info("SafeEC client stopped");
     }
 }

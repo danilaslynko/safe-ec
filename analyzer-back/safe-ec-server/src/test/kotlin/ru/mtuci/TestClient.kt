@@ -1,5 +1,6 @@
 package ru.mtuci
 
+import org.slf4j.LoggerFactory
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.net.InetAddress
@@ -7,9 +8,11 @@ import java.net.Socket
 import java.nio.charset.StandardCharsets
 import java.util.Base64
 
+private val log = LoggerFactory.getLogger("ru.mtuci.TestClient");
+
 class TestClient(private val port: Int) {
     private lateinit var socket: Socket
-    
+
     fun send(data: String) {
         if (socket.isClosed)
             open()
@@ -30,12 +33,15 @@ class TestClient(private val port: Int) {
         if (socket.isClosed)
             open()
 
-        val input = BufferedInputStream(socket.getInputStream())
+        val input = socket.getInputStream()
         val response = input.readUntil("$")
+        log.debug("Got response: {}", response)
         if (response.isEmpty())
             return ""
-        
-        return String(Base64.getDecoder().decode(response), StandardCharsets.UTF_8)
+
+        val decoded = String(Base64.getDecoder().decode(response), StandardCharsets.UTF_8)
+        log.debug("Decoded response: {}", decoded)
+        return decoded
     }
     
     fun open() {

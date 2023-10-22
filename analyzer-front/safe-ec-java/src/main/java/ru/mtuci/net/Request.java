@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicLong;
 @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
 @JsonSerialize
 public record Request(String id, Type type, String value) {
-    public enum Type { OID, Named, Params }
+    public enum Type { OID, Name, Params }
     
     private static final AtomicLong counter = new AtomicLong(1);
 

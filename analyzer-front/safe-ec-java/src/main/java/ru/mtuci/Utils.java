@@ -2,7 +2,6 @@ package ru.mtuci;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import io.churchkey.ec.Curve;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -55,8 +54,7 @@ public class Utils
 
     public static String toJsonIndented(Object obj)
     {
-        var writer = mapper.writer();
-        writer.with(SerializationFeature.INDENT_OUTPUT);
+        var writer = mapper.writerWithDefaultPrettyPrinter();
         return toJson(writer, obj);
     }
 

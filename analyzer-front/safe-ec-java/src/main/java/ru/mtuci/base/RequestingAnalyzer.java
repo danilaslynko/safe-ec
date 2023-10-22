@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -38,13 +39,13 @@ public abstract class RequestingAnalyzer extends Analyzer
             List<RequestDto> requests = makeRequests();
             for (RequestDto request : requests)
             {
-                Response response = request.response().get();
+                Response response = request.response().get(60, TimeUnit.SECONDS);
                 var failure = switch (response.type())
                 {
                     case SUCCESS -> null;
                     case ERROR ->
-                            addError("EC check request failed: reqId={}, info='{}'", response.reqId(), response.info());
-                    case VULNERABLE -> addError(response.info());
+                            addError(null, "EC check request failed: reqId={}, info='{}'", response.reqId(), response.info());
+                    case VULNERABLE -> addError(response.rule(), response.info());
                 };
 
                 if (failure != null)
@@ -56,8 +57,8 @@ public abstract class RequestingAnalyzer extends Analyzer
         }
         catch (Exception e)
         {
-            log.error("{} failed", getClass().getSimpleName(), e);
-            var failure = addError("{} failed", getClass().getSimpleName(), e);
+            log.error("{} failed on file {}", getClass().getSimpleName(), path, e);
+            var failure = addError(null, "{} failed on file {}", getClass().getSimpleName(), path, e);
             failure.setMeta(simpleMeta());
         }
     }

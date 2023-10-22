@@ -14,17 +14,17 @@ public sealed interface Result permits Result.TechError, Result.Validated, Resul
     /**
      * Кривая признана уязвимой по результатам проверок
      */
-    record Vulnerable(String message) implements Result {}
+    record Vulnerable(String rule, String message) implements Result {}
 
     /**
      * Если результат анализа не позволяет однозначно определить уязвимость или безопасность кривой
      */
     record Undefined() implements Result {}
 
-    static Result validated(String message) {
+    static Result validated(String rule, String message) {
         if (message == null || message.trim().isEmpty())
             return new Validated();
 
-        return new Vulnerable(message);
+        return new Vulnerable(rule, message);
     }
 }

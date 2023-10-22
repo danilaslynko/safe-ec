@@ -12,12 +12,14 @@ import java.util.function.Consumer;
 @Setter
 public class AnalysisFailure implements Consumer<Result>
 {
+    private final String rule;
     private final String message;
     private final Throwable cause;
     private LocationMeta meta;
 
-    public AnalysisFailure(String template, Object... args)
+    public AnalysisFailure(String rule, String template, Object... args)
     {
+        this.rule = rule;
         var formattingTuple = MessageFormatter.arrayFormat(template, args);
         this.message = formattingTuple.getMessage();
         this.cause = formattingTuple.getThrowable();
@@ -29,7 +31,8 @@ public class AnalysisFailure implements Consumer<Result>
         if (meta != null)
             meta.accept(result);
 
-        result.withLevel(Result.Level.ERROR)
+        result.withRuleId(rule)
+                .withLevel(Result.Level.ERROR)
                 .withMessage(new Message().withText(message));
     }
 }

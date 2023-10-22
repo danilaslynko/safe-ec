@@ -39,7 +39,7 @@ fun check(c: Curve?): Result {
     return if (c == null)
         Undefined()
     else if (list.contains(c))
-        Vulnerable("Usage of curve " + c.getName() + " is insecure")
+        Vulnerable("KnownUnsafeCurve", "Usage of curve " + c.getName() + " is insecure")
     else
         Validated()
 }

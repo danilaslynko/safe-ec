@@ -1,14 +1,17 @@
 package ru.mtuci
 
 import de.tilman_neumann.jml.factor.CombinedFactorAlgorithm
+import de.tilman_neumann.jml.factor.base.UnsafeUtil
 import de.tilman_neumann.util.SortedMultiset
 import de.tilman_neumann.util.SortedMultiset_BottomUp
+import org.apache.log4j.Level
+import org.apache.log4j.LogManager
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.math.BigInteger
 import java.nio.channels.FileChannel
 import java.nio.file.StandardOpenOption
-import java.util.LinkedHashMap
+import java.util.*
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantReadWriteLock
@@ -23,19 +26,15 @@ private class LRUCache<K, V> : LinkedHashMap<K, V>() {
 
 private val sync = ReentrantReadWriteLock()
 private val cache = LRUCache<BigInteger, SortedMultiset<BigInteger>>()
-private val cacheDir = File("../workdir/safecurves/primes")
+private val cacheDir = File("safecurves/primes").absoluteFile
 private val cacheLock = cacheDir.resolve("cache.lock")
 
 fun main(vararg args: String) {
-    if (args[0] == "factor") {
-        val factorizer = CombinedFactorAlgorithm(6)
-        val factors = factorizer.factor(BigInteger(args[1]))
-        val result = factors.map { "${it.key}^${it.value}" }.joinToString("+")
-        println(result)
-    }
-    else {
-        throw RuntimeException("Unknown args $args")
-    }
+    LogManager.getLogger(UnsafeUtil::class.java).level = Level.OFF
+    val factorizer = CombinedFactorAlgorithm(6)
+    val factors = factorizer.factor(BigInteger(args[0]))
+    val result = factors.map { "${it.key}^${it.value}" }.joinToString("+")
+    println(result)
 }
 
 private fun cache(bi: BigInteger, factors: SortedMultiset<BigInteger>) = sync.write {
@@ -58,8 +57,7 @@ private fun cache(bi: BigInteger, factors: SortedMultiset<BigInteger>) = sync.wr
                 primeFile.writer().use { it.write("$times") }
             }
         }
-    }
-    catch (e: Exception) {
+    } catch (e: Exception) {
         log.error("Cannot write cache to file system", e)
     }
 }
@@ -90,31 +88,39 @@ private fun fromDir(bi: BigInteger, factors: SortedMultiset<BigInteger>) {
             val primes = primesDir.list()
             for (prime in primes!!) {
                 val primeBi = BigInteger(prime)
-                if ((bi.mod(primeBi)).compareTo(BigInteger.ZERO) != 0) {
+                val absBi = bi.abs();
+                if ((absBi.mod(primeBi.abs())).compareTo(BigInteger.ZERO) != 0) {
                     factors.clear()
                     primesDir.deleteRecursively()
                     return
                 }
 
                 val times = Integer.parseInt(primesDir.resolve(prime).readText())
-                var localBi = bi
-                var realTimes = 0
-                while (localBi.mod(primeBi).compareTo(BigInteger.ZERO) == 0) {
-                    realTimes++
-                    localBi /= primeBi
-                }
+                if (primeBi.signum() == -1) {
+                    if (primeBi.abs().compareTo(BigInteger.ONE) != 0 || bi.signum() != -1 || times != 1) {
+                        factors.clear()
+                        primesDir.deleteRecursively()
+                        return
+                    }
+                } else {
+                    var localBi = absBi;
+                    var realTimes = 0
+                    while (localBi.mod(primeBi).compareTo(BigInteger.ZERO) == 0) {
+                        realTimes++
+                        localBi /= primeBi
+                    }
 
-                if (realTimes != times) {
-                    factors.clear()
-                    primesDir.deleteRecursively()
-                    return
+                    if (realTimes != times) {
+                        factors.clear()
+                        primesDir.deleteRecursively()
+                        return
+                    }
                 }
 
                 factors[primeBi] = times
             }
         }
-    }
-    catch (e: Exception) {
+    } catch (e: Exception) {
         log.error("Unable to find cached factors", e)
         factors.clear()
     }
@@ -122,49 +128,63 @@ private fun fromDir(bi: BigInteger, factors: SortedMultiset<BigInteger>) {
 
 private val log = LoggerFactory.getLogger("ru.mtuci.Factor")
 
+class Factorizer
+
 fun factor(integer: BigInteger): SortedMultiset<BigInteger> {
     val factors = SortedMultiset_BottomUp<BigInteger>()
     fromCache(integer, factors)
     if (!factors.isEmpty())
         return factors
 
-    val timeout = Integer.getInteger("factor.timeout", 0).toLong()
+    val timeout = Integer.getInteger("factor.timeout", 60).toLong()
     val javaHome = System.getProperty("java.home")
     val javaBin = javaHome + File.separator + "bin" + File.separator + "java"
-    val classpath = System.getProperty("java.class.path")
+    val clazz = Factorizer::class.java
+    val currentJar = clazz.protectionDomain.codeSource.location.file
+    val classpath = System.getProperty("java.class.path") +
+            if (System.getProperty("os.name").lowercase(Locale.getDefault()).contains("win"))
+                ";$currentJar"
+            else
+                ":$currentJar"
+
     val command = listOf(
-        javaBin,
-        /* "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005",*/
-        "-cp",
-        classpath,
-        "ru.mtuci.FactorizerKt",
-        "factor",
-        integer.toString()
+            javaBin,
+//       "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005",
+            "-cp",
+            classpath,
+            "ru.mtuci.FactorizerKt",
+            integer.toString()
     )
     val processBuilder = ProcessBuilder(command)
 
+    log.info("Factorizing $integer")
     val process = processBuilder.start()
     var result = ""
     val outputCollected = CountDownLatch(1)
     val outputCollector = Thread {
         try {
+            try {
+                val error = process.errorStream.reader().readText();
+                if (error.isNotEmpty())
+                    log.error("\n{}", error);
+            } catch (_: Throwable) {
+            }
             result = process.inputStream.reader().readText()
-        }
-        catch (e: Throwable) {
+        } catch (e: Throwable) {
             log.error("Cannot factor number $integer", e)
-        }
-        finally {
+        } finally {
             outputCollected.countDown()
         }
     }
     outputCollector.start()
     val exitValue = if (timeout > 0) {
-        if (!process.waitFor(timeout, TimeUnit.SECONDS))
+        if (!process.waitFor(timeout, TimeUnit.SECONDS)) {
             process.destroyForcibly()
+            log.info("Factorizer killed")
+        }
 
         process.exitValue()
-    }
-    else {
+    } else {
         process.waitFor()
     }
 
@@ -180,5 +200,6 @@ fun factor(integer: BigInteger): SortedMultiset<BigInteger> {
     }
 
     cache(integer, factors)
+    log.info("Factor result $factors")
     return factors
 }

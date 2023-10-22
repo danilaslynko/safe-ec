@@ -25,7 +25,9 @@ public abstract class Analyzer
     @SneakyThrows
     protected Analyzer(Path path)
     {
-        this.path = path == null ? null : path.toAbsolutePath();
+        this.path = path == null ? null : path.toAbsolutePath().normalize();
+        if (path != null)
+            log.debug("Analyzer created for {}", this.path);
     }
 
     public abstract void analyze();
@@ -35,9 +37,9 @@ public abstract class Analyzer
         return Collections.unmodifiableList(errors);
     }
 
-    protected AnalysisFailure addError(String template, Object... args)
+    protected AnalysisFailure addError(String rule, String template, Object... args)
     {
-        var error = new AnalysisFailure(template, args);
+        var error = new AnalysisFailure(rule, template, args);
         this.errors.add(error);
         return error;
     }

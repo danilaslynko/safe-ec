@@ -6,20 +6,15 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
-import ru.mtuci.plugins.IPlugins
-import ru.mtuci.plugins.Plugin
-import ru.mtuci.plugins.Request
+import ru.mtuci.plugins.*
 import ru.mtuci.plugins.Request.Named
 import ru.mtuci.plugins.Request.OID
 import ru.mtuci.plugins.Request.Params
 import ru.mtuci.plugins.Request.Params.Supplementary
-import ru.mtuci.plugins.Result
 import ru.mtuci.plugins.Result.TechError
 import ru.mtuci.plugins.Result.Undefined
 import ru.mtuci.plugins.Result.Validated
 import ru.mtuci.plugins.Result.Vulnerable
-import java.io.BufferedInputStream
-import java.io.BufferedOutputStream
 import java.math.BigInteger
 import java.net.ServerSocket
 import java.net.Socket
@@ -75,7 +70,7 @@ class Server(private val port: Int, private val plugins: IPlugins) {
                 try {
                     handleClient(client)
                 }
-                catch (e: Exception) {
+                catch (e: Throwable) {
                     log.error("Cannot handle client", e)
                 }
                 finally {
@@ -89,8 +84,8 @@ class Server(private val port: Int, private val plugins: IPlugins) {
     }
 
     private fun handleClient(client: Socket) {
-        val out = BufferedOutputStream(client.getOutputStream())
-        val input = BufferedInputStream(client.getInputStream())
+        val out = client.getOutputStream()
+        val input = client.getInputStream()
         log.debug("New client {}", client)
         while (!stopped.get() && !client.isClosed) {
             var command: Command? = null
@@ -107,14 +102,19 @@ class Server(private val port: Int, private val plugins: IPlugins) {
                 log.info("Request: $decoded")
                 command = Json.decodeFromString<Command>(decoded)
                 val request = command.toRequest()
-                val plugins = plugins.list.groupBy { p: Plugin -> p.priority() }.toSortedMap()
+                val plugins = plugins.list.groupBy { p: Plugin -> p.priority() }.toSortedMap(Comparator.reverseOrder())
                 plugins.keys.fold(Undefined() as Result) { acc, priority ->
                     when (acc) {
                         is Vulnerable, is TechError -> acc
                         is Undefined, is Validated -> plugins[priority]!!.fold(acc) { acc, plugin ->
                             when (acc) {
                                 is Vulnerable, is TechError -> acc
-                                is Undefined, is Validated -> request.accept(plugin)
+                                is Undefined, is Validated -> {
+                                    log.info("Running ${plugin.javaClass.canonicalName}:${plugin.name()}")
+                                    val result = request.accept(plugin)
+                                    log.info("Plugin finished with result {}", result)
+                                    result
+                                }
                             }
                         }
                     }
@@ -124,6 +124,7 @@ class Server(private val port: Int, private val plugins: IPlugins) {
                 TechError(e.message)
             }
 
+            log.info("Result is {}", result)
             val response = when (result) {
                 is Validated, is Undefined -> Response(command?.id, SUCCESS)
                 is TechError -> Response(command?.id, ERROR, result.message)

@@ -28,11 +28,11 @@ class Plugins(path: String) : IPlugins {
     private val log = LoggerFactory.getLogger(javaClass)
 
     private val lock = ReentrantReadWriteLock()
-    private val container = HashMap<Path, Pair<ClassLoader, Plugin>>()
+    private val container = HashMap<Path, Pair<ClassLoader, List<Plugin>>>()
     private val path: Path
     private val channel: Channel<WatchEvent<Path>>
 
-    override val list: List<Plugin> get() = lock.read { Collections.unmodifiableList(container.values.map { it.second }) }
+    override val list: List<Plugin> get() = lock.read { Collections.unmodifiableList(container.values.flatMap { it.second }) }
 
     init {
         val file = File(path)
@@ -65,18 +65,13 @@ class Plugins(path: String) : IPlugins {
     }
 
     private fun load(jar: Path) {
-        val cl = URLClassLoader(arrayOf(jar.toUri().toURL()))
+        val cl = URLClassLoader(arrayOf(jar.toUri().toURL()), this::class.java.classLoader)
         val plugins = ServiceLoader.load(Plugin::class.java, cl)
-        plugins.findFirst().ifPresent {
-            container[jar] = Pair(cl, it)
-            log.info("Loaded plugin from jar ${jar.toAbsolutePath()} with classloader=$cl:\n${pluginString(it)}")
-        }
+        container[jar] = Pair(cl, plugins.toList())
+        log.info("Loaded plugins from jar ${jar.toAbsolutePath()} with classloader=$cl:\n${plugins.joinToString(System.lineSeparator()) { pluginString(it) }}")
     }
 
     private fun unload(jar: Path): Boolean {
-        if (!container.containsKey(jar))
-            return false
-
         val p = container.remove(jar)
         val res = p != null
         if (res)

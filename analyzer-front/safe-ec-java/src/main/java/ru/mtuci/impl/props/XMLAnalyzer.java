@@ -5,11 +5,16 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
+import org.xml.sax.EntityResolver;
+import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
 import ru.mtuci.base.LocationMeta;
 import ru.mtuci.base.RequestingAnalyzer;
 import ru.mtuci.utils.Either;
 
+import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -45,7 +50,21 @@ public class XMLAnalyzer extends RequestingAnalyzer
             try (var is = Files.newInputStream(path))
             {
                 props.clear();
-                var document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(is);
+                var dbf = DocumentBuilderFactory.newInstance();
+                String feature;
+                // If you can't completely disable DTDs, then at least do the following:
+                feature = "http://xml.org/sax/features/external-general-entities";
+                dbf.setFeature(feature, false);
+
+                feature = "http://xml.org/sax/features/external-parameter-entities";
+                dbf.setFeature(feature, false);
+
+                // Disable external DTDs as well
+                feature = "http://apache.org/xml/features/nonvalidating/load-external-dtd";
+                dbf.setFeature(feature, false);
+                var builder = dbf.newDocumentBuilder();
+                builder.setEntityResolver((publicId, systemId) -> null);
+                var document = builder.parse(is);
                 var root = document.getDocumentElement();
                 var result = new HashMap<String, Pair<String, String>>();
                 flattenXml("", "", null, root, result);

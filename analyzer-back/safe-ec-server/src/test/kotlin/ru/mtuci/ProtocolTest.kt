@@ -27,7 +27,7 @@ class ProtocolTest {
         `when`(testPlugin.check(any(Named::class.java))).thenAnswer {
             val passed = it.getArgument<Named>(0)
             assertEquals(data, passed.name)
-            return@thenAnswer Result.validated(errorMessage)
+            return@thenAnswer Result.validated("TEST", errorMessage)
         }
 
         client.send(Json.encodeToString(Command("1", "Name", data)))

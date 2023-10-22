@@ -19,7 +19,7 @@ sed -i 's/<property name="ant.build.javac.target" value="1.10"\/>/<property name
 
 ant jar
 zip -d build/jml.jar org/apache/log4j/*
-mvn install:install-file "-Dfile=build/jml.jar" "-DgroupId=de.tillman_neumann" "-DartifactId=java-math-library" "-Dversion=1.3.1" "-Dpackaging=jar" "-DgeneratePom=true"
+mvn install:install-file "-Dfile=build/jml.jar" "-DgroupId=de.tillman_neumann" "-DartifactId=java-math-library" "-Dversion=$TAG" "-Dpackaging=jar" "-DgeneratePom=true"
 cd ../..
 
 rm -rf tmp;
